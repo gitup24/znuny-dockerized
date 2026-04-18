@@ -6,7 +6,7 @@ set -e
 
 # Configuration
 IMAGE_NAME="andreynsafonov/znuny"
-VERSION="7.2.3"
+VERSION="7.3.1"
 
 echo "======================================"
 echo "Building PRODUCTION Znuny Docker image"

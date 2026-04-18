@@ -2,7 +2,7 @@
 
 [![Docker Hub](https://img.shields.io/docker/v/andreynsafonov/znuny?sort=semver)](https://hub.docker.com/r/andreynsafonov/znuny)
 [![Docker Pulls](https://img.shields.io/docker/pulls/andreynsafonov/znuny)](https://hub.docker.com/r/andreynsafonov/znuny)
-[![Image Size](https://img.shields.io/docker/image-size/andreynsafonov/znuny/7.2.3)](https://hub.docker.com/r/andreynsafonov/znuny)
+[![Image Size](https://img.shields.io/docker/image-size/andreynsafonov/znuny/7.3.1)](https://hub.docker.com/r/andreynsafonov/znuny)
 
 Lightweight Docker image for [Znuny](https://www.znuny.org/) - an open-source ticket management system.
 
@@ -47,7 +47,7 @@ Znuny will be available at: <http://localhost:8081>
 docker pull andreynsafonov/znuny:latest
 
 # Specific version
-docker pull andreynsafonov/znuny:7.2.3
+docker pull andreynsafonov/znuny:7.3.1
 ```
 
 ## Configuration
@@ -96,7 +96,7 @@ Mounting `/opt/znuny` as a single volume ensures that:
 ```yaml
 services:
   znuny:
-    image: andreynsafonov/znuny:7.2.3
+    image: andreynsafonov/znuny:7.3.1
     ports:
       - "80:80"
     environment:
@@ -108,6 +108,7 @@ services:
       - ZNUNY_DB_PASSWORD=changeme
       - ZNUNY_AUTO_INSTALL=true
       - ZNUNY_ROOT_PASSWORD=secure_password
+      - ZNUNY_SYSTEM_ID=10
       - ZNUNY_FQDN=support.example.com
     volumes:
       - znuny-data:/opt/znuny
@@ -141,7 +142,7 @@ volumes:
 ```yaml
 services:
   znuny:
-    image: andreynsafonov/znuny:7.2.3
+    image: andreynsafonov/znuny:7.3.1
     ports:
       - "80:80"
     environment:
@@ -152,6 +153,7 @@ services:
       - ZNUNY_DB_PASSWORD=changeme
       - ZNUNY_AUTO_INSTALL=true
       - ZNUNY_ROOT_PASSWORD=secure_password
+      - ZNUNY_SYSTEM_ID=10
     volumes:
       - znuny-data:/opt/znuny
     depends_on:
@@ -180,6 +182,60 @@ volumes:
   znuny-data:
   mysql-data:
 ```
+
+## Upgrading
+
+### Automatic Upgrades
+
+When you update to a new Znuny version, the container automatically performs database migration:
+
+1. **Backup your database** before upgrading (highly recommended!)
+2. Pull the new image version:
+
+   ```bash
+   docker pull andreynsafonov/znuny:7.3.1
+   ```
+
+3. Update your `docker-compose.yml` with the new image tag
+4. Restart the container:
+
+   ```bash
+   docker compose down
+   docker compose up -d
+   ```
+
+The upgrade process automatically:
+
+- Detects version changes by comparing installed version with container version
+- Runs migration scripts (`MigrateToZnuny*.pl`)
+- Reinstalls all packages (OPM extensions)
+- Rebuilds configuration and clears cache
+- Updates the Znuny Daemon
+
+### Version Tracking
+
+The installed version is stored in `/opt/znuny/var/.znuny_version`. The upgrade script compares this with the `ZNUNY_VERSION` environment variable in the container.
+
+### Manual Upgrade
+
+To manually trigger an upgrade or troubleshoot:
+
+```bash
+# Enter the container
+docker exec -it znuny bash
+
+# Run the upgrade script
+/usr/local/bin/upgrade.sh
+```
+
+### Rollback
+
+If upgrade fails, restore from your database backup:
+
+1. Stop the container
+2. Restore the database from backup
+3. Revert to the previous image version in `docker-compose.yml`
+4. Start the container
 
 ## First Login
 
@@ -239,8 +295,8 @@ docker compose logs znuny-postgres | grep AUTOINSTALL
 
 ## Available Tags
 
-- `latest` - Latest stable version (currently 7.2.3)
-- `7.2.3` - Specific version tag
+- `latest` - Latest stable version (currently 7.3.1)
+- `7.3.1` - Specific version tag
 
 ## Performance
 

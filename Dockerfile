@@ -4,7 +4,9 @@ FROM debian:12-slim AS base
 
 LABEL maintainer="andreynsafonov"
 
-ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
 
 # Install system dependencies (cache forever)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -12,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     gnupg \
+    rsync \
     wget \
     lsb-release \
     # Web server
@@ -40,12 +43,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Stage 2: Znuny application (rebuild when version changes)
 FROM base AS app
 
-ENV ZNUNY_VERSION=7.2.3 \
-    ZNUNY_HOME=/opt/znuny
+# ZNUNY_HOME нужен для apt-шага (путь используется позже), версию выносим ниже
+ENV ZNUNY_HOME=/opt/znuny
 
-LABEL description="Znuny ${ZNUNY_VERSION} - Open Source Ticket System"
+LABEL description="Znuny - Open Source Ticket System"
 
-# Install Znuny Perl dependencies and download Znuny (combined to reduce layers)
+# Install Znuny Perl dependencies (отдельный слой — кэшируется независимо от версии Znuny)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Database drivers
     libdbd-mysql-perl \
@@ -85,6 +88,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libspreadsheet-xlsx-perl \
     libxml-parser-perl \
     libuuid-perl \
+    libmail-imapclient-perl \
+    libhash-merge-perl \
+    libical-parser-perl \
     cpanminus \
     # Build tools for compiling Data::UUID XS module
     build-essential \
@@ -98,13 +104,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /var/cache/apt/* \
-    && rm -rf /var/tmp/* \
-    # Download and install Znuny
-    && cd /opt \
-    && wget -q https://download.znuny.org/releases/znuny-${ZNUNY_VERSION}.tar.gz \
-    && tar xzf znuny-${ZNUNY_VERSION}.tar.gz \
+    && rm -rf /var/tmp/*
+
+# Версия Znuny — отдельный ENV после apt-слоя, чтобы не сбрасывать кэш пакетов
+ENV ZNUNY_VERSION=7.3.1
+
+# Copy and extract Znuny from local archive
+COPY znuny-7.3.1.tar.gz /tmp/
+RUN cd /opt \
+    && tar xzf /tmp/znuny-7.3.1.tar.gz \
     && mv znuny-${ZNUNY_VERSION} znuny \
-    && rm znuny-${ZNUNY_VERSION}.tar.gz \
+    && rm /tmp/znuny-7.3.1.tar.gz \
     # Clean up unnecessary files from Znuny
     && cd ${ZNUNY_HOME} \
     && rm -rf scripts/test/ \
@@ -147,10 +157,12 @@ COPY supervisord.conf /etc/supervisor/conf.d/znuny.conf
 # Copy scripts (these change most frequently)
 COPY docker-entrypoint.sh /usr/local/bin/
 COPY autoinstall.sh /usr/local/bin/
+COPY upgrade.sh /usr/local/bin/
 
 # Enable Apache site and set script permissions
 RUN a2ensite znuny \
-    && chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/autoinstall.sh
+    && chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/autoinstall.sh /usr/local/bin/upgrade.sh \
+    && cp -a ${ZNUNY_HOME} /opt/znuny-dist
 
 # Expose HTTP port
 EXPOSE 80

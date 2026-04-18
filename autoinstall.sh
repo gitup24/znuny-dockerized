@@ -5,9 +5,10 @@
 set -e
 
 ZNUNY_HOME="${ZNUNY_HOME:-/opt/znuny}"
-CONFIG_FILE="${ZNUNY_HOME}/Kernel/Config/Config.pm"
-CONFIG_LINK="${ZNUNY_HOME}/Kernel/Config.pm"
+CONFIG_FILE="${ZNUNY_HOME}/Kernel/Config.pm"
 INSTALLED_FLAG="${ZNUNY_HOME}/var/.znuny_installed"
+VERSION_FILE="${ZNUNY_HOME}/var/.znuny_version"
+CURRENT_VERSION="${ZNUNY_VERSION}"
 
 # Logging function - outputs to stdout immediately without buffering
 log() {
@@ -120,8 +121,11 @@ else
     SCHEMA_EXISTS=false
 fi
 
-# Create Kernel/Config.pm
-log "Creating Kernel/Config.pm..."
+# Create minimal Kernel/Config.pm
+log "Creating minimal Kernel/Config.pm..."
+
+# Ensure the directory exists
+mkdir -p "$(dirname "$CONFIG_FILE")"
 
 cat > "$CONFIG_FILE" <<EOF
 # OTRS config file (automatically created by auto-installer)
@@ -138,20 +142,10 @@ sub Load {
     # ---------------------------------------------------- #
     # database settings                                     #
     # ---------------------------------------------------- #
-
-    # The database host
     \$Self->{DatabaseHost} = '$DB_HOST';
-
-    # The database name
     \$Self->{Database} = '$DB_NAME';
-
-    # The database user
     \$Self->{DatabaseUser} = '$DB_USER';
-
-    # The password of database user
     \$Self->{DatabasePw} = '$DB_PASSWORD';
-
-    # The database DSN
     \$Self->{DatabaseDSN} = '$DB_DSN';
 
     # ---------------------------------------------------- #
@@ -160,89 +154,9 @@ sub Load {
     \$Self->{Home} = '$ZNUNY_HOME';
 
     # ---------------------------------------------------- #
-    # system data                                           #
+    # system data (minimal required)
     # ---------------------------------------------------- #
     \$Self->{SystemID} = '$SYSTEM_ID';
-    \$Self->{FQDN} = '$FQDN';
-    \$Self->{AdminEmail} = '$ADMIN_EMAIL';
-    \$Self->{Organization} = '$ORGANIZATION';
-
-    # ---------------------------------------------------- #
-    # SecureMode                                            #
-    # ---------------------------------------------------- #
-    \$Self->{SecureMode} = 1;
-
-    # ---------------------------------------------------- #
-    # default language
-    # ---------------------------------------------------- #
-    \$Self->{DefaultLanguage} = 'en';
-
-    # ---------------------------------------------------- #
-    # default charset
-    # ---------------------------------------------------- #
-    \$Self->{DefaultCharset} = 'utf-8';
-
-    # ---------------------------------------------------- #
-    # LogModule
-    # ---------------------------------------------------- #
-    \$Self->{LogModule} = 'Kernel::System::Log::File';
-
-    # ---------------------------------------------------- #
-    # SessionModule
-    # ---------------------------------------------------- #
-    \$Self->{'SessionModule'} = 'Kernel::System::AuthSession::DB';
-
-    # ---------------------------------------------------- #
-    # CustomerUser
-    # ---------------------------------------------------- #
-    \$Self->{CustomerUser} = {
-        Name   => 'Database Backend',
-        Module => 'Kernel::System::CustomerUser::DB',
-        Params => {
-            Table => 'customer_user',
-            CaseSensitive => 0,
-            SearchCaseSensitive => 0,
-        },
-        # customer unique id
-        CustomerKey => 'login',
-        # customer #
-        CustomerID    => 'customer_id',
-        CustomerValid => 'valid_id',
-        CustomerUserListFields => [ 'first_name', 'last_name', 'email' ],
-        CustomerUserSearchFields           => [ 'login', 'first_name', 'last_name', 'customer_id' ],
-        CustomerUserPostMasterSearchFields => ['email'],
-        CustomerUserNameFields             => [ 'title', 'first_name', 'last_name' ],
-        CustomerUserEmailUniqCheck         => 1,
-        CustomerCompanySupport => 1,
-        CacheTTL => 60 * 60 * 24,
-        Map => [
-            [ 'UserTitle',      'Title or salutation', 'title',       1, 0, 'var', '', 0 ],
-            [ 'UserFirstname',  'Firstname',           'first_name',  1, 1, 'var', '', 0 ],
-            [ 'UserLastname',   'Lastname',            'last_name',   1, 1, 'var', '', 0 ],
-            [ 'UserLogin',      'Username',            'login',       1, 1, 'var', '', 0 ],
-            [ 'UserPassword',   'Password',            'pw',          0, 0, 'var', '', 0 ],
-            [ 'UserEmail',      'Email',               'email',       1, 1, 'var', '', 0 ],
-            [ 'UserCustomerID', 'CustomerID',          'customer_id', 0, 1, 'var', '', 0 ],
-            [ 'UserPhone',      'Phone',               'phone',       1, 0, 'var', '', 0 ],
-            [ 'UserMobile',     'Mobile',              'mobile',      1, 0, 'var', '', 0 ],
-            [ 'UserStreet',     'Street',              'street',      1, 0, 'var', '', 0 ],
-            [ 'UserZip',        'Zip',                 'zip',         1, 0, 'var', '', 0 ],
-            [ 'UserCity',       'City',                'city',        1, 0, 'var', '', 0 ],
-            [ 'UserCountry',    'Country',             'country',     1, 0, 'var', '', 0 ],
-            [ 'UserComment',    'Comment',             'comments',    1, 0, 'var', '', 0 ],
-            [ 'ValidID',        'Valid',               'valid_id',    0, 1, 'int', '', 0 ],
-        ],
-    };
-
-    # ---------------------------------------------------- #
-    # CheckMXRecord
-    # ---------------------------------------------------- #
-    \$Self->{CheckMXRecord} = 0;
-
-    # ---------------------------------------------------- #
-    # CheckEmailAddresses
-    # ---------------------------------------------------- #
-    \$Self->{CheckEmailAddresses} = 1;
 
     return 1;
 }
@@ -262,13 +176,7 @@ EOF
 chown znuny:www-data "$CONFIG_FILE"
 chmod 660 "$CONFIG_FILE"
 
-# Create symlink from Kernel/Config.pm to Config/Config.pm
-if [ ! -L "$CONFIG_LINK" ]; then
-    ln -sf "$CONFIG_FILE" "$CONFIG_LINK"
-    log "Created symlink: $CONFIG_LINK -> $CONFIG_FILE"
-fi
-
-log "Kernel/Config.pm created successfully"
+log "Minimal Kernel/Config.pm created successfully"
 
 # Install database schema if needed
 if [ "$SCHEMA_EXISTS" = false ]; then
@@ -364,6 +272,58 @@ else
     log "Warning: Failed to rebuild configuration"
 fi
 
+# Configure system settings via Console
+log "Configuring system settings via Console..."
+
+# Set FQDN
+if su - znuny -c "${ZNUNY_HOME}/bin/otrs.Console.pl Admin::Config::Update --setting-name FQDN --value '$FQDN'" 2>&1; then
+    log "FQDN set to: $FQDN"
+else
+    log "Warning: Failed to set FQDN"
+fi
+
+# Set AdminEmail
+if su - znuny -c "${ZNUNY_HOME}/bin/otrs.Console.pl Admin::Config::Update --setting-name AdminEmail --value '$ADMIN_EMAIL'" 2>&1; then
+    log "AdminEmail set to: $ADMIN_EMAIL"
+else
+    log "Warning: Failed to set AdminEmail"
+fi
+
+# Set Organization
+if su - znuny -c "${ZNUNY_HOME}/bin/otrs.Console.pl Admin::Config::Update --setting-name Organization --value '$ORGANIZATION'" 2>&1; then
+    log "Organization set to: $ORGANIZATION"
+else
+    log "Warning: Failed to set Organization"
+fi
+
+# Set SecureMode
+if su - znuny -c "${ZNUNY_HOME}/bin/otrs.Console.pl Admin::Config::Update --setting-name SecureMode --value 1" 2>&1; then
+    log "SecureMode enabled"
+else
+    log "Warning: Failed to enable SecureMode"
+fi
+
+# Set LogModule to File (store logs in /opt/znuny/var/log)
+if su - znuny -c "${ZNUNY_HOME}/bin/otrs.Console.pl Admin::Config::Update --setting-name LogModule --value 'Kernel::System::Log::File'" 2>&1; then
+    log "LogModule set to File"
+else
+    log "Warning: Failed to set LogModule"
+fi
+
+# Set log file location
+if su - znuny -c "${ZNUNY_HOME}/bin/otrs.Console.pl Admin::Config::Update --setting-name 'LogModule::LogFile' --value '${ZNUNY_HOME}/var/log/znuny.log'" 2>&1; then
+    log "Log file location set to: ${ZNUNY_HOME}/var/log/znuny.log"
+else
+    log "Warning: Failed to set log file location"
+fi
+
+# Set Article storage to filesystem
+if su - znuny -c "${ZNUNY_HOME}/bin/otrs.Console.pl Admin::Config::Update --setting-name 'Ticket::Article::Backend::MIMEBase::ArticleStorage' --value 'Kernel::System::Ticket::Article::Backend::MIMEBase::ArticleStorageFS'" 2>&1; then
+    log "Article storage set to filesystem"
+else
+    log "Warning: Failed to set article storage"
+fi
+
 # Delete cache
 log "Deleting cache..."
 if su - znuny -c "${ZNUNY_HOME}/bin/otrs.Console.pl Maint::Cache::Delete" 2>&1; then
@@ -375,6 +335,11 @@ fi
 # Create installed flag
 touch "$INSTALLED_FLAG"
 chown znuny:www-data "$INSTALLED_FLAG"
+
+# Save installed version
+log "Saving installed version: $CURRENT_VERSION"
+echo "$CURRENT_VERSION" > "$VERSION_FILE"
+chown znuny:www-data "$VERSION_FILE"
 
 log "=== Znuny Auto-Installation Completed Successfully ==="
 log "You can now access Znuny at http://${FQDN}/"
