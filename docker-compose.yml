@@ -1,7 +1,8 @@
+
 services:
   # PostgreSQL variant
   znuny-postgres:
-    image: andreynsafonov/znuny:${IMAGE_TAG}
+    image: andreynsafonov/znuny:${IMAGE_TAG:-latest}
     container_name: znuny-postgres
     ports:
       - "8080:80"
