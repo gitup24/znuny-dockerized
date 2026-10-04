@@ -109,12 +109,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Версия Znuny — отдельный ENV после apt-слоя, чтобы не сбрасывать кэш пакетов
 ENV ZNUNY_VERSION=7.3.1
 
-# Copy and extract Znuny from local archive
-COPY znuny-7.3.1.tar.gz /tmp/
-RUN cd /opt \
-    && tar xzf /tmp/znuny-7.3.1.tar.gz \
+# Download and extract Znuny
+RUN curl -fsSL https://download.znuny.org/releases/znuny-${ZNUNY_VERSION}.tar.gz -o /tmp/znuny.tar.gz \
+    && cd /opt \
+    && tar xzf /tmp/znuny.tar.gz \
     && mv znuny-${ZNUNY_VERSION} znuny \
-    && rm /tmp/znuny-7.3.1.tar.gz \
+    && rm /tmp/znuny.tar.gz \
     # Clean up unnecessary files from Znuny
     && cd ${ZNUNY_HOME} \
     && rm -rf scripts/test/ \

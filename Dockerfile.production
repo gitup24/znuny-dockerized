@@ -94,13 +94,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /var/cache/apt/* \
     && rm -rf /var/tmp/* \
-    # Copy and extract Znuny from local archive
-    && cd /opt
-
-COPY znuny-7.3.1.tar.gz /tmp/
-RUN tar xzf /tmp/znuny-7.3.1.tar.gz -C /opt \
+    # Download and extract Znuny
+    && curl -fsSL https://download.znuny.org/releases/znuny-${ZNUNY_VERSION}.tar.gz -o /tmp/znuny.tar.gz \
+    && cd /opt \
+    && tar xzf /tmp/znuny.tar.gz -C /opt \
     && mv /opt/znuny-${ZNUNY_VERSION} /opt/znuny \
-    && rm /tmp/znuny-7.3.1.tar.gz \
+    && rm /tmp/znuny.tar.gz \
     # Clean up unnecessary files from Znuny
     && cd ${ZNUNY_HOME} \
     && rm -rf scripts/test/ \
